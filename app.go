@@ -43,26 +43,36 @@ func NewCodiceApp() (*CodiceApp, error) {
 
 // LoadZip downloads a zip file from a HTTP server and parses its content
 func (c *CodiceApp) LoadWebZip(url string) (*[]Entry, error) {
-	resp, err := http.Get(url)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
+	var r *bytes.Reader
+	var size int64
 
-	i, _ := strconv.Atoi(resp.Header.Get("Content-Length"))
-	bar := pb.Default.Start(i)
-	bar.Set(pb.Bytes, true)
-	bar.SetTemplate("Downloading... {{speed . }} (downloaded: {{counters .}})")
-	bar.Start()
-	reader := bar.NewProxyReader(resp.Body)
-	body, err := ioutil.ReadAll(reader)
-	if err != nil {
-		log.Fatal(err)
+	if strings.HasPrefix(url, "http") {
+		resp, err := http.Get(url)
+		if err != nil {
+			return nil, err
+		}
+		defer resp.Body.Close()
+		i, _ := strconv.Atoi(resp.Header.Get("Content-Length"))
+		bar := pb.Default.Start(i)
+		bar.Set(pb.Bytes, true)
+		bar.SetTemplate("Downloading... {{speed . }} (downloaded: {{counters .}})")
+		bar.Start()
+		reader := bar.NewProxyReader(resp.Body)
+		body, err := ioutil.ReadAll(reader)
+		if err != nil {
+			log.Fatal(err)
+		}
+		bar.Finish()
+		r = bytes.NewReader(body)
+		size = int64(len(body))
+	} else {
+		content, err := ioutil.ReadFile(url)
+		if err != nil {
+			log.Fatal(err)
+		}
+		r = bytes.NewReader(content)
+		size = int64(len(content))
 	}
-	bar.Finish()
-
-	r := bytes.NewReader(body)
-	size := int64(len(body))
 
 	// Most of files are .zip, so we assume first we are dealing with one of those.
 	parsedEntries, err := c.loadZipFromMemory(r, size)
@@ -70,7 +80,7 @@ func (c *CodiceApp) LoadWebZip(url string) (*[]Entry, error) {
 		fmt.Println("Uh, this does not look like zip. Trying 7z...")
 		parsedEntries, err = c.load7zFromMemory(r, size)
 		if err != nil {
-			fmt.Println("Uh, this does not look like 7z either :(")
+			fmt.Printf("Error parsing 7zip: %s", err)
 		}
 	}
 	return parsedEntries, nil
