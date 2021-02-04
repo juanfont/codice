@@ -42,38 +42,67 @@ func NewCodiceApp() (*CodiceApp, error) {
 }
 
 // LoadZip downloads a zip file from a HTTP server and parses its content
-func (c *CodiceApp) LoadWebZip(url string) (*[]Entry, error) {
-	resp, err := http.Get(url)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
+func (c *CodiceApp) LoadWebZip(url string, aggregateEntries bool) (*[]Entry, error) {
+	var r *bytes.Reader
+	var size int64
 
-	i, _ := strconv.Atoi(resp.Header.Get("Content-Length"))
-	bar := pb.Default.Start(i)
-	bar.Set(pb.Bytes, true)
-	bar.SetTemplate("Downloading... {{speed . }} (downloaded: {{counters .}})")
-	bar.Start()
-	reader := bar.NewProxyReader(resp.Body)
-	body, err := ioutil.ReadAll(reader)
-	if err != nil {
-		log.Fatal(err)
+	if strings.HasPrefix(url, "http") {
+		resp, err := http.Get(url)
+		if err != nil {
+			return nil, err
+		}
+		defer resp.Body.Close()
+		i, _ := strconv.Atoi(resp.Header.Get("Content-Length"))
+		bar := pb.Default.Start(i)
+		bar.Set(pb.Bytes, true)
+		bar.SetTemplate("Downloading... {{speed . }} (downloaded: {{counters .}})")
+		bar.Start()
+		reader := bar.NewProxyReader(resp.Body)
+		body, err := ioutil.ReadAll(reader)
+		if err != nil {
+			log.Fatal(err)
+		}
+		bar.Finish()
+		r = bytes.NewReader(body)
+		size = int64(len(body))
+	} else {
+		content, err := ioutil.ReadFile(url)
+		if err != nil {
+			log.Fatal(err)
+		}
+		r = bytes.NewReader(content)
+		size = int64(len(content))
 	}
-	bar.Finish()
-
-	r := bytes.NewReader(body)
-	size := int64(len(body))
 
 	// Most of files are .zip, so we assume first we are dealing with one of those.
 	parsedEntries, err := c.loadZipFromMemory(r, size)
 	if err != nil {
-		fmt.Println("Uh, this does not look like zip. Trying 7z...")
 		parsedEntries, err = c.load7zFromMemory(r, size)
 		if err != nil {
-			fmt.Println("Uh, this does not look like 7z either :(")
+			fmt.Printf("Error parsing 7zip: %s", err)
+			return nil, err
 		}
 	}
-	return parsedEntries, nil
+	if !aggregateEntries {
+		return parsedEntries, nil
+	}
+
+	// In an entry appears multiple times, we keep only the last one
+	eMap := make(map[string]Entry)
+	for _, e := range *parsedEntries {
+		if em, ok := eMap[e.ID]; ok {
+			if e.Updated.After(em.Updated) {
+				eMap[e.ID] = e
+			}
+		} else {
+			eMap[e.ID] = e
+		}
+	}
+	cleanedEntries := []Entry{}
+	for _, e := range eMap {
+		cleanedEntries = append(cleanedEntries, e)
+	}
+	return &cleanedEntries, nil
 }
 
 // load7z loads a zip-formatted file already in memory
@@ -114,13 +143,14 @@ func (c *CodiceApp) load7zFromMemory(r *bytes.Reader, size int64) (*[]Entry, err
 		if err != nil {
 			return nil, err
 		}
+
 		if fileInfo.IsEmptyStream && !fileInfo.IsEmptyFile {
 			// If it is not an empty file nor empty stream then its a directory
 			//fmt.Printf("%s is a directory. Ignoring...\n", fileInfo.Name)
 			continue
 		}
 		fmt.Println("Parsing file:", fileInfo.Name)
-		data, err := ioutil.ReadAll(r)
+		data, err := ioutil.ReadAll(sevenR)
 		if err != nil {
 			return nil, err
 		}
@@ -130,11 +160,12 @@ func (c *CodiceApp) load7zFromMemory(r *bytes.Reader, size int64) (*[]Entry, err
 		}
 		parsedEntries = append(parsedEntries, *entries...)
 	}
+
 	return &parsedEntries, nil
 }
 
 // LoadXMLFromFs loads a XML from contrataciondelestado.es from the file system
-func (c *CodiceApp) LoadXMLFromFs(path string) (*[]Entry, error) {
+func (c *CodiceApp) LoadXMLFromFs(path string, aggregateEntries bool) (*[]Entry, error) {
 	xmlFile, err := os.Open(path)
 	if err != nil {
 		return nil, err
@@ -144,11 +175,31 @@ func (c *CodiceApp) LoadXMLFromFs(path string) (*[]Entry, error) {
 	if err != nil {
 		return nil, err
 	}
-	entries, err := c.parseXML(xmlData)
+	parsedEntries, err := c.parseXML(xmlData)
 	if err != nil {
 		return nil, err
 	}
-	return entries, nil
+
+	if !aggregateEntries {
+		return parsedEntries, nil
+	}
+
+	// In an entry appears multiple times, we keep only the last one
+	eMap := make(map[string]Entry)
+	for _, e := range *parsedEntries {
+		if em, ok := eMap[e.ID]; ok {
+			if e.Updated.After(em.Updated) {
+				eMap[e.ID] = e
+			}
+		} else {
+			eMap[e.ID] = e
+		}
+	}
+	cleanedEntries := []Entry{}
+	for _, e := range eMap {
+		cleanedEntries = append(cleanedEntries, e)
+	}
+	return &cleanedEntries, nil
 }
 
 func (c *CodiceApp) parseXML(xmlData []byte) (*[]Entry, error) {
