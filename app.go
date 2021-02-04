@@ -77,10 +77,10 @@ func (c *CodiceApp) LoadWebZip(url string) (*[]Entry, error) {
 	// Most of files are .zip, so we assume first we are dealing with one of those.
 	parsedEntries, err := c.loadZipFromMemory(r, size)
 	if err != nil {
-		fmt.Println("Uh, this does not look like zip. Trying 7z...")
 		parsedEntries, err = c.load7zFromMemory(r, size)
 		if err != nil {
 			fmt.Printf("Error parsing 7zip: %s", err)
+			return nil, err
 		}
 	}
 	return parsedEntries, nil
@@ -124,13 +124,14 @@ func (c *CodiceApp) load7zFromMemory(r *bytes.Reader, size int64) (*[]Entry, err
 		if err != nil {
 			return nil, err
 		}
+
 		if fileInfo.IsEmptyStream && !fileInfo.IsEmptyFile {
 			// If it is not an empty file nor empty stream then its a directory
 			//fmt.Printf("%s is a directory. Ignoring...\n", fileInfo.Name)
 			continue
 		}
 		fmt.Println("Parsing file:", fileInfo.Name)
-		data, err := ioutil.ReadAll(r)
+		data, err := ioutil.ReadAll(sevenR)
 		if err != nil {
 			return nil, err
 		}
