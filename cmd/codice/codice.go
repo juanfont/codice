@@ -46,7 +46,8 @@ var xmlFileCmd = &cobra.Command{
 		if err != nil {
 			log.Fatalln(err)
 		}
-		entries, err := c.LoadXMLFromFs(os.Args[2])
+		aggregate, _ := cmd.Flags().GetBool("aggregate")
+		entries, err := c.LoadXMLFromFs(os.Args[2], aggregate)
 		if err != nil {
 			log.Fatalln(err)
 		}
@@ -71,7 +72,8 @@ var zipCmd = &cobra.Command{
 		if err != nil {
 			log.Fatalln(err)
 		}
-		entries, err := c.LoadWebZip(os.Args[2])
+		aggregate, _ := cmd.Flags().GetBool("aggregate")
+		entries, err := c.LoadWebZip(os.Args[2], aggregate)
 		if err != nil {
 			log.Fatalln(err)
 		}
@@ -95,4 +97,8 @@ func addCommands() {
 	codiceCmd.AddCommand(versionCmd)
 	codiceCmd.AddCommand(xmlFileCmd)
 	codiceCmd.AddCommand(zipCmd)
+
+	xmlFileCmd.Flags().BoolP("aggregate", "a", false, "Keep only the most updated appearence on an entry")
+	zipCmd.Flags().BoolP("aggregate", "a", false, "Keep only the most updated appearence on an entry")
+
 }

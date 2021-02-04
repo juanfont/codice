@@ -14,19 +14,25 @@ And then just run:
 ./codice zip https://contrataciondelestado.es/sindicacion/sindicacion_643/licitacionesPerfilesContratanteCompleto3_2016.zip output_prefix
 ```
 
-Alternatively, you can read an already-download zip
+Alternatively, you can read an already-download zip from your disk:
 
 ```
 ./codice zip licitacionesPerfilesContratanteCompleto3_2016.zip output_prefix
 ```
 
 
-And you'll get:
+In both cases you'll get:
 
 ```
 Entries rows written to output_prefix_entries.csv
 Modifications rows written to output_prefix_modifications.csv
 Financial Guarantee rows written to output_prefix_financial_guarantees.csv
+```
+
+**Note:** Sometimes an entry might appear multiple times within the same zip. This happens when the date on a procurement process is updated within the same year. You can pass the flag `--aggregate` to keep only the most updated reference to these entries.
+
+```
+./codice zip https://contrataciondelestado.es/sindicacion/sindicacion_643/licitacionesPerfilesContratanteCompleto3_2016.zip output_prefix --aggregate
 ```
 
 

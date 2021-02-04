@@ -42,7 +42,7 @@ func NewCodiceApp() (*CodiceApp, error) {
 }
 
 // LoadZip downloads a zip file from a HTTP server and parses its content
-func (c *CodiceApp) LoadWebZip(url string) (*[]Entry, error) {
+func (c *CodiceApp) LoadWebZip(url string, aggregateEntries bool) (*[]Entry, error) {
 	var r *bytes.Reader
 	var size int64
 
@@ -83,7 +83,26 @@ func (c *CodiceApp) LoadWebZip(url string) (*[]Entry, error) {
 			return nil, err
 		}
 	}
-	return parsedEntries, nil
+	if !aggregateEntries {
+		return parsedEntries, nil
+	}
+
+	// In an entry appears multiple times, we keep only the last one
+	eMap := make(map[string]Entry)
+	for _, e := range *parsedEntries {
+		if em, ok := eMap[e.ID]; ok {
+			if e.Updated.After(em.Updated) {
+				eMap[e.ID] = e
+			}
+		} else {
+			eMap[e.ID] = e
+		}
+	}
+	cleanedEntries := []Entry{}
+	for _, e := range eMap {
+		cleanedEntries = append(cleanedEntries, e)
+	}
+	return &cleanedEntries, nil
 }
 
 // load7z loads a zip-formatted file already in memory
@@ -141,11 +160,12 @@ func (c *CodiceApp) load7zFromMemory(r *bytes.Reader, size int64) (*[]Entry, err
 		}
 		parsedEntries = append(parsedEntries, *entries...)
 	}
+
 	return &parsedEntries, nil
 }
 
 // LoadXMLFromFs loads a XML from contrataciondelestado.es from the file system
-func (c *CodiceApp) LoadXMLFromFs(path string) (*[]Entry, error) {
+func (c *CodiceApp) LoadXMLFromFs(path string, aggregateEntries bool) (*[]Entry, error) {
 	xmlFile, err := os.Open(path)
 	if err != nil {
 		return nil, err
@@ -155,11 +175,31 @@ func (c *CodiceApp) LoadXMLFromFs(path string) (*[]Entry, error) {
 	if err != nil {
 		return nil, err
 	}
-	entries, err := c.parseXML(xmlData)
+	parsedEntries, err := c.parseXML(xmlData)
 	if err != nil {
 		return nil, err
 	}
-	return entries, nil
+
+	if !aggregateEntries {
+		return parsedEntries, nil
+	}
+
+	// In an entry appears multiple times, we keep only the last one
+	eMap := make(map[string]Entry)
+	for _, e := range *parsedEntries {
+		if em, ok := eMap[e.ID]; ok {
+			if e.Updated.After(em.Updated) {
+				eMap[e.ID] = e
+			}
+		} else {
+			eMap[e.ID] = e
+		}
+	}
+	cleanedEntries := []Entry{}
+	for _, e := range eMap {
+		cleanedEntries = append(cleanedEntries, e)
+	}
+	return &cleanedEntries, nil
 }
 
 func (c *CodiceApp) parseXML(xmlData []byte) (*[]Entry, error) {
