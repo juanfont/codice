@@ -14,6 +14,12 @@ And then just run:
 ./codice zip https://contrataciondelestado.es/sindicacion/sindicacion_643/licitacionesPerfilesContratanteCompleto3_2016.zip output_prefix
 ```
 
+Alternatively, you can read an already-download zip
+
+```
+./codice zip licitacionesPerfilesContratanteCompleto3_2016.zip output_prefix
+```
+
 
 And you'll get:
 
